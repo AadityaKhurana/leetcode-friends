@@ -2,12 +2,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 interface SubmissionStats {
   count: number;
   difficulty: string;
 }
 
+interface Submission {
+  title: string;
+  titleSlug: string;
+  statusDisplay: string;
+  timestamp: number;
+  lang: string;
+}
 interface ProfileData {
   matchedUser: {
     username: string;
@@ -78,15 +86,16 @@ export default function Home() {
         today.setHours(0, 0, 0, 0);
         const startOfDay = Math.floor(today.getTime() / 1000);
         json.recentSubmissionList = json.recentSubmissionList
-          .filter((submission: { timestamp: number }) => submission.timestamp >= startOfDay)
+          .filter((submission: Submission) => submission.timestamp >= startOfDay)
           .filter((submission: { statusDisplay: string }) => submission.statusDisplay === 'Accepted')
           .filter(
-            (submission: { titleSlug: string }, idx: number, arr: any[]) =>
+            (submission: { titleSlug: string }, idx: number, arr: Submission[]) =>
               arr.findIndex((s) => s.titleSlug === submission.titleSlug) === idx
           );
         setData([...data, json]);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) setError(err.message);
+        else setError('Unknown error occurred');
       }
       setLoading(false);
     }
@@ -112,17 +121,18 @@ export default function Home() {
         today.setHours(0, 0, 0, 0);
         const startOfDay = Math.floor(today.getTime() / 1000);
         json.recentSubmissionList = json.recentSubmissionList
-          .filter((submission: { timestamp: number }) => submission.timestamp >= startOfDay)
+          .filter((submission: Submission) => submission.timestamp >= startOfDay)
           .filter((submission: { statusDisplay: string }) => submission.statusDisplay === 'Accepted')
           .filter(
-            (submission: { titleSlug: string }, idx: number, arr: any[]) =>
+            (submission: { titleSlug: string }, idx: number, arr: Submission[]) =>
               arr.findIndex((s) => s.titleSlug === submission.titleSlug) === idx
           );
         results.push(json);
       }
       setData(results);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message);
+      else setError('Unknown error occurred');
     }
     setLoading(false);
   };
@@ -173,11 +183,13 @@ export default function Home() {
             {data.map((profile) => (
               <div key={profile.matchedUser.username} className="bg-gray-800 p-4 rounded shadow mt-4">
                 <div className="flex items-center mb-4">
-                  <img
-                    src={profile.matchedUser.profile.userAvatar}
-                    alt="avatar"
-                    className="w-12 h-12 rounded-full mr-4 border border-gray-600"
-                  />
+                  <Image
+                  src={profile.matchedUser.profile.userAvatar}
+                  alt="avatar"
+                  width={48}
+                  height={48}
+                  className="rounded-full mr-4 border border-gray-600"
+                />
                   <h2 className="text-xl font-semibold">{profile.matchedUser.username}</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mb-4">

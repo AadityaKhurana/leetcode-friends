@@ -14,7 +14,9 @@ export async function GET(request: Request) {
     const lc = new LeetCode();
     const user = await lc.user(username);
     return NextResponse.json(user);
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch profile', details: error.message }, { status: 500 });
   }
+  catch (err: unknown) {
+  if (err instanceof Error) return NextResponse.json({ error: 'Failed to fetch profile', details: err.message }, { status: 500 });
+  else return NextResponse.json({ error: 'Unknown error occurred' }, { status: 500 });
+}
 }
