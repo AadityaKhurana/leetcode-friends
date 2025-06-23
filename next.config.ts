@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
 };
 module.exports = {
   images: {
-    domains: ['assets.leetcode.com'], // or whatever domain the avatar uses
+    domains: ['assets.leetcode.com'],
   },
 };
 

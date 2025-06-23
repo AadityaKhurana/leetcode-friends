@@ -171,7 +171,6 @@ export default function Home() {
                   className="ml-2 text-red-400 hover:text-red-600"
                   title="Remove"
                 >
-                  ×
                 </button>
               </span>
             ))}
