@@ -1,103 +1,247 @@
-import Image from "next/image";
+// app/page.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+
+interface SubmissionStats {
+  count: number;
+  difficulty: string;
+}
+
+interface ProfileData {
+  matchedUser: {
+    username: string;
+    profile: {
+      userAvatar: string;
+    };
+    submitStats: {
+      acSubmissionNum: SubmissionStats[];
+    };
+    submissionCalendar: string;
+  };
+  recentSubmissionList: Array<{
+    title: string;
+    titleSlug: string;
+    statusDisplay: string;
+    timestamp: number;
+    lang: string;
+  }>;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [username, setUsername] = useState('');
+  const [userList, setUserList] = useState<string[]>(() => {
+    // Load from localStorage on first render
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('leetcodeUserList');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
+  const [data, setData] = useState<ProfileData[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  // Save userList to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('leetcodeUserList', JSON.stringify(userList));
+  }, [userList]);
+
+  // Optionally, fetch profiles on mount if userList is not empty
+  useEffect(() => {
+    if (userList.length > 0) {
+      fetchProfiles(userList);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const addUser = async () => {
+    const trimmed = username.trim();
+    if (trimmed && !userList.includes(trimmed)) {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch(`/api/leetcode?username=${trimmed}`);
+        const json = await res.json();
+        if (
+          !res.ok ||
+          !json.matchedUser ||
+          !json.matchedUser.profile
+        ) {
+          throw new Error(json.error || `Invalid username: ${trimmed}`);
+        }
+        const newList = [...userList, trimmed];
+        setUserList(newList);
+        setUsername('');
+        // Filter today's accepted submissions and unique problems
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfDay = Math.floor(today.getTime() / 1000);
+        json.recentSubmissionList = json.recentSubmissionList
+          .filter((submission: { timestamp: number }) => submission.timestamp >= startOfDay)
+          .filter((submission: { statusDisplay: string }) => submission.statusDisplay === 'Accepted')
+          .filter(
+            (submission: { titleSlug: string }, idx: number, arr: any[]) =>
+              arr.findIndex((s) => s.titleSlug === submission.titleSlug) === idx
+          );
+        setData([...data, json]);
+      } catch (err: any) {
+        setError(err.message);
+      }
+      setLoading(false);
+    }
+  };
+
+  const removeUser = (name: string) => {
+    setUserList(userList.filter((u) => u !== name));
+    setData(data.filter((profile) => profile.matchedUser.username !== name));
+  };
+
+  // Update fetchProfiles to accept an optional list
+  const fetchProfiles = async (list = userList) => {
+    setError('');
+    setLoading(true);
+    setData([]);
+    try {
+      const results: ProfileData[] = [];
+      for (const name of list) {
+        const res = await fetch(`/api/leetcode?username=${name}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `Failed to fetch for ${name}`);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfDay = Math.floor(today.getTime() / 1000);
+        json.recentSubmissionList = json.recentSubmissionList
+          .filter((submission: { timestamp: number }) => submission.timestamp >= startOfDay)
+          .filter((submission: { statusDisplay: string }) => submission.statusDisplay === 'Accepted')
+          .filter(
+            (submission: { titleSlug: string }, idx: number, arr: any[]) =>
+              arr.findIndex((s) => s.titleSlug === submission.titleSlug) === idx
+          );
+        results.push(json);
+      }
+      setData(results);
+    } catch (err: any) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold mb-4 text-center">LeetCode Friends</h1>
+        <div className="flex mb-4">
+          <input
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="flex-1 p-2 rounded bg-gray-800 border border-gray-600"
+            onKeyDown={async (e) => { if (e.key === 'Enter') await addUser(); }}
+          />
+          <button
+            onClick={addUser}
+            className="ml-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+            disabled={loading}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Add User
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        {loading && (
+          <div className="mb-4 text-center text-purple-400 font-semibold">Fetching...</div>
+        )}
+        {userList.length > 0 && (
+          <div suppressHydrationWarning className="mb-4 flex flex-wrap gap-2">
+            {userList.map((u) => (
+              <span key={u} className="bg-gray-700 px-3 py-1 rounded-full flex items-center">
+                {u}
+                <button
+                  onClick={() => removeUser(u)}
+                  className="ml-2 text-red-400 hover:text-red-600"
+                  title="Remove"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {error && <p className="text-red-500">{error}</p>}
+        {data.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {data.map((profile) => (
+              <div key={profile.matchedUser.username} className="bg-gray-800 p-4 rounded shadow mt-4">
+                <div className="flex items-center mb-4">
+                  <img
+                    src={profile.matchedUser.profile.userAvatar}
+                    alt="avatar"
+                    className="w-12 h-12 rounded-full mr-4 border border-gray-600"
+                  />
+                  <h2 className="text-xl font-semibold">{profile.matchedUser.username}</h2>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {profile.matchedUser.submitStats.acSubmissionNum.map((s) => (
+                    <div
+                      key={s.difficulty}
+                      className="bg-gray-700 p-3 rounded text-center"
+                    >
+                      <h3 className="text-lg font-bold">{s.difficulty}</h3>
+                      <p className="text-2xl">{s.count}</p>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="flex items-center mb-2">
+                  <h3 className="text-lg font-bold mr-2">Submissions made today:</h3>
+                  <span className="text-gray-400">{profile.recentSubmissionList.length} submission(s)</span>
+                  </div>
+                  {profile.recentSubmissionList.length === 0 ? (
+                    <p className="text-gray-400">No submissions today.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {profile.recentSubmissionList.map((sub, idx) => (
+                        <li key={idx} className="bg-gray-700 p-2 rounded flex justify-between items-center">
+                          <div>
+                            <a
+                              href={`https://leetcode.com/problems/${sub.titleSlug}/description/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-purple-400 hover:underline inline-flex items-center"
+                            >
+                              {sub.title}
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="ml-1 w-4 h-4 inline-block"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14m-4 0v7h7" />
+                              </svg>
+                            </a>
+                            <span className="ml-2 text-sm text-gray-400">({sub.lang})</span>
+                          </div>
+                          <span
+                            className={
+                              sub.statusDisplay === 'Accepted'
+                                ? 'text-green-400'
+                                : 'text-red-400'
+                            }
+                          >
+                            {sub.statusDisplay}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
